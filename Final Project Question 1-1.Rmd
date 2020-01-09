@@ -1,0 +1,258 @@
+---
+title: "Final Project Question 1"
+author: "3032681732"
+date: "5/2/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(nlme)
+library(ggplot2)
+```
+##Question 1: How does number of plots affect power, parameter estimates, and/or Type I error rate for main effects of Oat Variety and Fertilization.
+```{r}
+#Function to simulate 1 split-plot data set that intakse a specified number of plots per oat variety, the true oat and fertilizer effects, as well as the individual random plot effect specified by plot_var (plot variance) and also the overall residual.
+simulate_one_data <- function(num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd) {
+  
+  oat_variety <- c(1, 2)
+  treatment_type <- c(1, 0)
+  row <- 1
+  y <- numeric(0)
+  oat <- numeric(0)
+  fert <- numeric(0)
+  plot <- numeric(0)
+  
+  for (i in 1:length(oat_effects)) {
+    for (pl in 1:num_plots) {
+      plot_effect <- rnorm(1, 0, plot_var)
+      for (treat in 1:length(fertilizer_effects)) {
+        y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd)
+        oat[row] <- oat_variety[i]
+        fert[row] <- treatment_type[treat]
+        if (i == 1) {
+          plot[row] <- pl
+        } else {
+          plot[row] <- pl + num_plots
+        }
+        row <- row + 1
+      }
+    }
+  }
+  oat <- factor(oat)
+  fert <- factor(fert)
+  plot <- factor(plot)
+  
+  
+  data <- data.frame(y, oat, fert, plot)
+  
+  data
+}
+```
+
+```{r}
+#Function to simulate many split-plot data sets with the same parameters as simulate_one_data, with the addition of num_sims to specify the number of simulations to perform. The output will be a list containing each simulations data frames.
+simulate_many <- function(num_sims, num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd){
+  
+  result <- list()
+  for (i in 1:num_sims) {
+    d <- simulate_one_data(num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd)
+    
+    result[[i]] <- d
+  }
+result
+}
+```
+
+###Figure 1.1
+
+```{r}
+#One data set with number of plots 20, true oat effect difference being 2, true fertilizer difference being 9, plot variance as 1 and residual as .5. I choose the fertilizer effect to be more significant than the oat effect in order to generate data that has clear trends in the treatment types (depicted below by the red data points, having received the fertilizer treatment, having higher yield levels than the black data points, control treatment). Intuitively, choosing fertilizer to have more of an effect than oat variety made the most sense to me.
+one_dataset <- simulate_many(1, 20, c(1, 3), c(10, 1), 1, .5)[[1]]
+one_dataset
+```
+
+```{r}
+with(one_dataset, plot(as.numeric(oat), 
+            y,
+            col = as.numeric(fert),
+            xlab = "Oat variety",
+            ylab = "Yield",
+            main = "Color indicates fertilizer"))
+```
+
+
+1.1 This figure illustrates that my simulation is generating oat yields for two different types of oats (indicated by the values of 1.0 and 2.0 on the x-axis) and that the oat yields are effected by whether the oat's plot were treated with fertilzer or not (indicated by the colors, black for no fertilizer and red for fertilizer). In this visual, I chose the treatment of fertilizer treatment to increase the oat yield which is why the red data points are above the black data points.
+
+
+##Figure 1.2
+```{r}
+#This function will allow an average difference to be calculated from a single dataset based on the number of plots used to simulate the data.
+get_avg_diff <- function(data, num_plots) {
+  oat1_avg <- sum(data$y[1:(num_plots*2)])/(num_plots*2)
+  oat2_avg <- sum(data$y[(num_plots*2+1):(num_plots*2*2)])/(num_plots*2)
+  oat2_avg-oat1_avg
+}
+
+#This function will generate data that will be used to generate boxplots of varying plot sizes.
+make_box_plot_data <- function(num_sims, varying_plots, 
+                         oat_effects, fertilizer_effects, plot_var, residual_sd) {
+  
+  
+  all_data <- list()
+  number_plots <- numeric(0)
+  differences <- numeric(0)
+  
+  for (i in 1:length(varying_plots)) {
+    num_plots <- varying_plots[i]
+    all_data[[i]] <- simulate_many(num_sims, num_plots, 
+                         oat_effects, fertilizer_effects, plot_var, residual_sd)
+  }
+  
+  row <-1
+  for (i in 1:length(varying_plots)) {
+    for (j in 1:num_sims) {
+      differences[row] <- get_avg_diff(all_data[[i]][[j]], varying_plots[i])
+      number_plots[row] <- varying_plots[i]
+      row <- 1 + row
+    }
+  }
+
+  data <- data.frame(number_plots, differences)
+  data
+  
+}
+```
+
+```{r}
+#Generate box plot data for plot sizes of 5, 10, 15, 50, 100, and 300, as well as simulation size of 500 for each.
+box_plot_data <- make_box_plot_data(500, c(5, 10, 15, 50, 100, 300), c(1, 3), c(10, 1), 1, .5)
+```
+
+```{r}
+#Generate box plot
+differences <- box_plot_data$differences
+plot_number <- box_plot_data$number_plots
+
+V <- c(differences[1:500], differences[501:1000], differences[1001:1500],  differences[1501:2000],  differences[2001:2500],  differences[2501:3000])
+G <- factor( c(rep("5 Plots", 500),
+               rep("10 Plots", 500),
+               rep("15 Plots", 500),
+               rep("50 Plots", 500),
+               rep("100 Plots", 500),
+               rep("300 Plots", 500))
+)
+plot(G, V)
+
+```
+
+2. The parameter estimates for oat variety are unbiased due to the estimated differences's medians being around the chosen true difference of 2 for oat variety effect (oat1 variety having an effect of 1, and oat2 variety having an effect of 3, leading to difference of 2). 
+
+3. According to the boxplot visualization, the variance of the estimated difference between the two oat varieties is higher for lower plot sizes, and lower for higher plot sizes (or sample size) which is indicated by the taller and shorter boxes, respectively. A taller box plot means that the data have more variance from the true difference of 2, whereas the shorter boxes are composed of data that is more similar towards having a difference of 2.
+
+###Figure 1.3
+```{r}
+set.seed(123)
+#This code generates a figure showing probability that you reject the null hypothesis of no Oat Variety effect, with different lines for different values of n. The chosen values of fertilizer treatment and control effects are 10 and 1. The x-axis shows the number of plots. 
+
+#I chose 100*100 simulations for all of my visualizations from here on, indicated by the num_sims variable.
+num_sims <- 100
+#A vector that contains the different number of plots that will be used to simulate data.
+varying_plots <- c(20, 80, 200, 600)
+#A vector that contains the different true oat effect differences that will be used to simulate data.
+varying_oat_effects <-c(0, .2, .6, .8)
+#Fertilizer effect stays consistent across all simulatiosn for 1.3 visualization.
+fert_effects <- c(1, 0)
+
+#These vectors will be created in a triple for loop, and will be contained in the end result data frame.
+prob_reject <- numeric(16)
+number_plots_n <- numeric(0)
+true_oat_difference <- numeric(0)
+#A p-value vector to aid in the calculation of probability of rejecting the null.
+p_vals <- numeric(0)
+  
+
+row <-1
+#Iterating through the varying plot size vector in order to simulate data with the different sample sizes (n).
+for (i in 1:length(varying_plots)) {
+  #Iterating through the varying oat effects vector in order to simulate data with combinations of all plot sizes     and oat effects.
+  for (j in 1:length(varying_oat_effects)) {
+    #Generating the appropriate number of simulations specified. 
+    for (k in 1:num_sims) {
+      sims <- simulate_many(num_sims, varying_plots[i],
+                              c(0, varying_oat_effects[j]), fert_effects, 1.4, .5)
+      p_vals[k] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims[[k]]))['oat', 'p-value']
+    }
+
+    number_plots_n[row] <-varying_plots[i]
+    true_oat_difference[row] <- varying_oat_effects[j]
+    prob_reject[row] <- mean(p_vals <= 0.05)
+    row <- row + 1
+  }
+}
+results_oat <- data.frame(prob_reject, true_oat_difference, factor(number_plots_n))
+```
+
+```{r}
+#Graphing 1.3 with the data simulated above.
+ggplot(data = results_oat) +
+aes(x = true_oat_difference, y =  prob_reject, col = factor(number_plots_n)) +
+geom_point() +
+geom_line(aes(group = factor(number_plots_n)))
+```
+
+
+###Figure 1.4
+
+```{r}
+set.seed(123)
+#This code is in the same format as the code for figure 1.3 (above), with the difference being that here the fertilizer effect is changing, and the oat effect is consistent across all simulations. The code from here on will be in a similar format, unless otherwise noted.
+num_sims4 <- 100
+varying_plots4 <- c(20, 80, 200, 600)
+varying_fertilizer_effects4 <-c(0, .2, .6, .8)
+oat_effects4 <- c(1, 0)
+
+
+prob_reject4 <- numeric(16)
+number_plots_n4 <- numeric(0)
+true_fert_difference4 <- numeric(0)
+p_vals4 <- numeric(0)
+  
+row <-1
+  
+for (i in 1:length(varying_plots4)) {
+  for (j in 1:length(varying_fertilizer_effects4)) {
+    for (k in 1:num_sims4) {
+      sims4 <- simulate_many(num_sims4, varying_plots4[i],
+                              oat_effects4, c(0, varying_fertilizer_effects4[j]), 1.4, .5)
+      p_vals4[k] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims4[[k]]))['fert', 'p-value']
+    }
+
+    number_plots_n4[row] <-varying_plots4[i]
+    true_fert_difference4[row] <- varying_fertilizer_effects4[j]
+    prob_reject4[row] <- mean(p_vals4 <= 0.05)
+    row <- row + 1
+  }
+}
+results_fert <- data.frame(prob_reject4, true_fert_difference4, factor(number_plots_n4))
+
+```
+
+```{r}  
+#Visualizing the data generated in for figure 1.4, which has varying numbers of plots (sample sizes), varying fertilizer effects, and a consistent oat effect.
+ggplot(data = results_fert) +
+aes(x = true_fert_difference4, y =  prob_reject4, col = factor(number_plots_n4)) +
+geom_point() +
+geom_line(aes(group = factor(number_plots_n4)))
+```
+
+
+4. The Type 1 error rates for oat variety and fertilization are both not valid because the probability of rejecting the null when then null is true (no actual effect when true difference is 0) is below .05 for the simulations with greater sample size (number of plots) which are more accurate than the smaller sample size simulation probabilities of rejecting the null. 
+
+5. There is more power for within-plot treatments (Fertilizer) because the power is higher between each given number of plots (sample size) which is indicated by the overall steeper slopes in the fertilization visualization.
+
+
+

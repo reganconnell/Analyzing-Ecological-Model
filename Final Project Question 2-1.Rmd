@@ -1,0 +1,297 @@
+---
+title: "Final Project Number 2"
+author: "3032681732"
+date: "5/16/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(nlme)
+library(ggplot2)
+```
+
+##Question 2: How does an interaction between Oat Variety and Fertilization impact power, parameter estimates, and/or Type I error rates?
+
+###Figure 2.1
+```{r}
+#Function to simulate 1 split-plot data set including interactions. The interactions are taken into account in the creation of y values, where the interaction value is included in the overall y yield.
+simulate_one_interactions <- function(interaction, num_plots, oat_effects, fertilizer_effects,
+                                      plot_var, residual_sd) {
+  
+  oat_variety <- c(1, 2)
+  treatment_type <- c(1, 0)
+  row <- 1
+  y <- numeric(0)
+  oat <- numeric(0)
+  fert <- numeric(0)
+  plot <- numeric(0)
+  interaction_vector <- c(-interaction, interaction, interaction, -interaction)
+  interaction_column <- numeric(0)
+
+  for (i in 1:length(oat_effects)) {
+    for (pl in 1:num_plots) {
+      plot_effect <- rnorm(1, 0, plot_var)
+      for (treat in 1:length(fertilizer_effects)) {
+        y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd) 
+        oat[row] <- oat_variety[i]
+        fert[row] <- treatment_type[treat]
+      
+        #conditions to add in correct interaction value based on oat type and treatment type.
+        if (i == 1 & treat == 1) {
+          plot[row] <- pl
+          interaction_column[row] <- interaction_vector[1]
+          y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd) + interaction_vector[1]
+        }
+        else if(i == 1 & treat == 2) {
+          plot[row] <- pl
+          interaction_column[row] <- interaction_vector[2]
+          y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd) + interaction_vector[2]
+        }
+        else if(i == 2 & treat == 1) {
+          plot[row] <- pl + num_plots
+          interaction_column[row] <- interaction_vector[3]
+          y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd) + interaction_vector[3]
+        }
+        else if(i == 2 & treat == 2) {
+          plot[row] <- pl + num_plots
+          interaction_column[row] <- interaction_vector[4]
+          y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd) + interaction_vector[4]
+        }
+        row <- row + 1
+      }
+    }
+  }
+  oat <- factor(oat)
+  fert <- factor(fert)
+  plot <- factor(plot)
+  interactions <- factor(interaction_column)
+  
+  
+  data <- data.frame(y, oat, fert, plot, interactions)
+  
+  data
+}
+```
+
+```{r}
+#Simulating one data set with interactions included for 2.1 visualization. I choose a large interaction factor in order to depict the non-parallel structure of output yields between the treatment and oat variety combinations.
+sim_interactions_oneset <- simulate_one_interactions(30, 10, c(1, 0), c(20, 1), 4, 2)
+head(sim_interactions_oneset)
+```
+
+```{r}
+with(sim_interactions_oneset, plot(as.numeric(oat), 
+            y,
+            col = as.numeric(fert),
+            xlab = "Oat variety",
+            ylab = "Yield",
+            main = "Fertilizer represented by color: black (control), red (treated with fertilizer)"))
+
+```
+
+2.1 My first visual shows that my simulation is working correctly because with interactions between certain combinations of oat variety and fertilization, the effect is much different which is depicted by the non-parallel yields for the different combos of oat varieties and fertilization treatments. For example, combo of fertilized and oat 1 produces much higher yields than the combo of oat 2 and fertilized which is due to the interaction between oat variety and fertilization.
+
+###Figure 2.2
+```{r}
+#Function to simulate many split-plot data sets with interactions. Same format as 1's simulate many function, except includes an interactions parameter.
+simulate_many_interactions <- function(interactions, num_sims, num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd){
+  
+  result <- list()
+  for (i in 1:num_sims) {
+    d <- simulate_one_interactions(interactions, num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd)
+    
+    result[[i]] <- d
+  }
+result
+}
+```
+
+```{r}
+num_sims22 <- 90
+true_interactions22 <- numeric(0)
+varying_interactions22 <-c(0, .6, .8, 1, 1.2, 1.6, 1.8, 2)
+
+oat_effects22 <- c(0, 5)
+fert_effects22 <- c(0, 5)
+
+
+prob_reject22 <- numeric(0)
+p_vals22 <- numeric(0)
+  
+row <-1
+  
+for (i in 1:length(varying_interactions22)) {
+  for (k in 1:num_sims22) {
+      sims22 <- simulate_many_interactions(varying_interactions22[i], num_sims22, 5,
+                              oat_effects22, fert_effects22, 1.5, 3)
+      p_vals22[k] <- anova(lme(y~oat * fert, random =~1 | plot, data = sims22[[k]]))['oat:fert', 'p-value']
+    }
+  
+    prob_reject22[row] <- mean(p_vals22 <= 0.05)
+    true_interactions22[row] <- varying_interactions22[i]
+    
+    row <- row + 1
+}
+
+results22 <- data.frame(prob_reject22, true_interactions22)
+
+```
+```{r}
+plot(true_interactions22, prob_reject22, type = "b", main = "Probability of Rejecting Null of no Interaction at differing interaction levels", ylim = c(0, 1), xlim = c(0, 2))
+
+```
+
+
+2.2 The test for an interaction is valid because as the true interaction increases, the probability of rejecting the null (that there are no interactions) increases which is what should happen as the true interaction increases.
+
+##Figure 2.3
+
+```{r}
+num_sims23 <-90
+fert_effects23 <- c(1, 0)
+true_interaction23 <- numeric(0)
+varying_interactions23 <- c(0, .7, 1.4)
+
+true_oat_difference23 <- numeric(0)
+varying_oat_differences23 <- c(0, .2, .6, .8)
+
+p_vals23 <- numeric(0)
+prob_reject23 <- numeric(0)
+
+
+row <-1
+for (i in 1:length(varying_oat_differences23)) {
+  for (j in 1:length(varying_interactions23)) {
+    for (k in 1:num_sims23) {
+      sims23 <- simulate_many_interactions(varying_interactions23[j], num_sims23, 25, c(0, varying_oat_differences23[i]), fert_effects23, .4, .8)
+      p_vals23[k] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims23[[k]]))['oat', 'p-value']
+    }
+    prob_reject23[row] <- mean(p_vals23 <= 0.05)
+    true_oat_difference23[row] <- varying_oat_differences23[i]
+    true_interaction23[row] <- varying_interactions23[j]
+    
+    row <- row +1
+  }
+}
+
+results23 <- data.frame(prob_reject23, true_oat_difference23, factor(true_interaction23))
+results23
+```
+
+
+```{r}
+ggplot(data = results23) +
+aes(x = true_oat_difference23, y =  prob_reject23, col = factor(true_interaction23)) +
+geom_point() +
+geom_line(aes(group = factor(true_interaction23)))
+```
+
+```{r}
+num_sims24 <-90
+fert_effects24 <- c(1, 0)
+true_interaction24 <- numeric(0)
+varying_interactions24 <- c(0, .7, 1.4)
+
+true_oat_difference24 <- numeric(0)
+varying_oat_differences24 <- c(0, .2, .6, .8)
+
+p_vals24 <- numeric(0)
+prob_reject24 <- numeric(0)
+
+
+row <-1
+for (i in 1:length(varying_oat_differences24)) {
+  for (j in 1:length(varying_interactions24)) {
+    for (k in 1:num_sims24) {
+      sims24 <- simulate_many_interactions(varying_interactions24[j], num_sims23, 25, c(0, varying_oat_differences24[i]), fert_effects24, .4, .8)
+      p_vals24[k] <- anova(lme(y~oat * fert, random =~1 | plot, data = sims24[[k]]))['oat', 'p-value']
+    }
+    prob_reject24[row] <- mean(p_vals24 <= 0.05)
+    true_oat_difference24[row] <- varying_oat_differences24[i]
+    true_interaction24[row] <- varying_interactions24[j]
+    
+    row <- row +1
+  }
+}
+
+results24 <- data.frame(prob_reject24, true_oat_difference24, factor(true_interaction24))
+results24
+
+```
+
+
+```{r}
+ggplot(data = results24) +
+aes(x = true_oat_difference24, y =  prob_reject24, col = factor(true_interaction24)) +
+geom_point() +
+geom_line(aes(group = factor(true_interaction24)))
+
+
+```
+
+
+2.3 Type I error rate and statistical power for Oat Variety when there really is an
+interaction but it is omitted from the analysis decrease.
+
+2.4 Type I error rate and statistical power are not effected when there really is no interaction for oat variety but one is allowed in the analysis.
+
+```{r}
+#This function will allow an average difference to be calculated from a single dataset based on the number of plots used to simulate the data.
+get_avg_diff <- function(data, num_plots) {
+  oat1_avg <- sum(data$y[1:(num_plots*2)])/(num_plots*2)
+  oat2_avg <- sum(data$y[(num_plots*2+1):(num_plots*2*2)])/(num_plots*2)
+  oat2_avg-oat1_avg
+}
+```
+
+```{r}
+num_sims25 <-90
+fert_effects25 <- c(1, 0)
+true_interaction25 <- numeric(0)
+varying_interactions25 <- c(0, .7, 1.4)
+
+true_oat_difference25 <- numeric(0)
+varying_oat_differences25 <- c(0, .2, .6, .8)
+
+p_vals25 <- numeric(0)
+prob_reject25 <- numeric(0)
+avg_diffs25 <- numeric(0)
+mean_est_yield <- numeric(0)
+
+
+row <-1
+for (i in 1:length(varying_oat_differences25)) {
+  for (j in 1:length(varying_interactions25)) {
+    for (k in 1:num_sims25) {
+      sims25 <- simulate_many_interactions(varying_interactions25[j], num_sims23, 25, c(0, varying_oat_differences25[i]), fert_effects25, 1.4, .5)
+      avg_diffs25[k] <- get_avg_diff(sims25[[k]], 20)
+    }
+    mean_est_yield[row] <- abs(mean(avg_diffs25))
+    true_oat_difference25[row] <- varying_oat_differences25[i]
+    true_interaction25[row] <- varying_interactions25[j]
+    
+    row <- row +1
+  }
+}
+
+results25 <- data.frame(mean_est_yield, true_oat_difference25, factor(true_interaction25))
+results25
+```
+
+
+```{r}
+sims25[[1]]
+sims25[[2]]
+ggplot(data = results25) +
+aes(x = true_oat_difference25, y =  mean_est_yield, col = factor(true_interaction25)) +
+geom_point() +
+geom_line(aes(group = factor(true_interaction25)))
+```
+
+2.5 The parameter estimates are not biased because the mean estimated yield differences are similar to the true differences when interactions are included in the model output.
+
+

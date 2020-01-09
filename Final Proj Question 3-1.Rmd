@@ -1,0 +1,337 @@
+---
+title: "Final Project Question 3"
+author: "3032681732"
+date: "5/16/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(nlme)
+library(ggplot2)
+```
+
+##Question 3: Comparison of adding more plots vs. replicating within plots
+
+###Figure 3.1
+####Importing simulate_many function from 
+```{r}
+#Function to simulate 1 split-plot data set that intakse a specified number of plots per oat variety, the true oat and fertilizer effects, as well as the individual random plot effect specified by plot_var (plot variance) and also the overall residual.
+simulate_one_data <- function(num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd) {
+  
+  oat_variety <- c(1, 2)
+  treatment_type <- c(1, 0)
+  row <- 1
+  y <- numeric(0)
+  oat <- numeric(0)
+  fert <- numeric(0)
+  plot <- numeric(0)
+  
+  for (i in 1:length(oat_effects)) {
+    for (pl in 1:num_plots) {
+      plot_effect <- rnorm(1, 0, plot_var)
+      for (treat in 1:length(fertilizer_effects)) {
+        y[row] <- oat_effects[i] + plot_effect + fertilizer_effects[treat] + rnorm(1, 0, residual_sd)
+        oat[row] <- oat_variety[i]
+        fert[row] <- treatment_type[treat]
+        if (i == 1) {
+          plot[row] <- pl
+        } else {
+          plot[row] <- pl + num_plots
+        }
+        row <- row + 1
+      }
+    }
+  }
+  oat <- factor(oat)
+  fert <- factor(fert)
+  plot <- factor(plot)
+  
+  
+  data <- data.frame(y, oat, fert, plot)
+  
+  data
+}
+```
+
+```{r}
+#Function to simulate many split-plot data sets with the same parameters as simulate_one_data, with the addition of num_sims to specify the number of simulations to perform. The output will be a list containing each simulations data frames.
+simulate_many <- function(num_sims, num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd){
+  
+  result <- list()
+  for (i in 1:num_sims) {
+    d <- simulate_one_data(num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd)
+    
+    result[[i]] <- d
+  }
+result
+}
+```
+
+```{r}
+#Here is the code to create the data to generate figure 3.1, a figure showing probability that you reject the null hypothesis of no Oat Variety effect, but with plots per Oat Variety on the “x”-axis and different lines for different true Oat variety effects (including no effect).
+
+num_sims31<-90
+fert_effects31 <- c(5, 0)
+num_plots31 <- 5
+num_plots_vector31 <- c(num_plots31, 2*num_plots31, 3*num_plots31,
+                        4*num_plots31, 5*num_plots31)
+varying_oat_effects31 <- c(0, 1, 2, 3)
+
+plots_per_oat_variety <- numeric(0)
+true_oat_effect31 <- numeric(0)
+prob_reject31<- numeric(0)
+p_vals31 <- numeric(0)
+
+
+row <-1
+
+for (i in 1:length(num_plots_vector31)) {
+  for (j in 1:length(varying_oat_effects31)) {
+    for (n in 1:num_sims31) {
+      sims31 <- simulate_many(num_sims31, num_plots_vector31[i], c(0, varying_oat_effects31[j]), fert_effects31, 1.5, 1)
+      
+      p_vals31[n] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims31[[n]]))['oat', 'p-value']
+    }
+    prob_reject31[row] <- mean(p_vals31 <= 0.05)
+    true_oat_effect31[row] <- varying_oat_effects31[j]
+    plots_per_oat_variety[row] <- num_plots_vector31[i]
+    row <- row +1
+  }
+}
+
+results31 <- data.frame(prob_reject31, true_oat_effect31, factor(plots_per_oat_variety))
+results31
+
+```
+
+```{r}
+ggplot(data = results31) +
+aes(x = factor(plots_per_oat_variety), y =  prob_reject31, col = factor(true_oat_effect31)) +
+geom_point() +
+geom_line(aes(group = factor(true_oat_effect31)))
+```
+
+
+###Figure 3.2
+
+```{r}
+#This function will simualte one data set of split-plot design with varying replicates.
+simulate_one_with_reps <- function(num_reps, num_plots, oat_effects, fert_treatment, plot_var, residual_sd){
+
+  oat_variety <- c(1, 2)
+  fertilizer_treatment <- c(1, 0)
+  oat <- numeric(0)
+  fert <- numeric(0)
+  
+  plot <- numeric(0)
+  y <- numeric(0)
+  
+  row <- 1
+  replicate <- numeric(0)
+  for (i in 1:length(oat_variety)){
+    for (j in 1:num_plots) {
+      plot_effect <- rnorm(1, 0, plot_var)
+      for (n in 1:num_reps) {
+        for (f in 1:length(fertilizer_treatment)) {
+          y[row] <-  plot_effect + rnorm(1, 0, residual_sd) + oat_effects[i] + fert_treatment[f]
+          oat[row] <- oat_variety[i]
+          fert[row] <- fertilizer_treatment[f]
+          plot[row] <- j
+          replicate[row] <- n
+          row <- row + 1
+        }
+      }
+    }
+  }
+  
+  
+  oat <- factor(oat)
+  fert <- factor(fert)
+  plot <- factor(plot)
+  replicate <- factor(replicate)
+  data <- data.frame(y, oat, plot, replicate, fert)
+  data
+}
+#Example of a data frame with replicates for sanity check:
+simulate_one_with_reps(4, 3, c(1, 3), c(10, 1), 1, 2)
+```
+
+
+```{r}
+#This function will simulate many data sets with replicates included using the function simulate_one_with_reps above.
+simulate_many_reps <- function(replicates, num_sims, num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd){
+  
+  result <- list()
+  for (i in 1:num_sims) {
+    d <- simulate_one_with_reps(replicates, num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd)
+    
+    result[[i]] <- d
+  }
+result
+}
+
+```
+
+
+```{r}
+#Here is the code to create the data to generate figure 3.2,  a figure showing probability that you reject the null hypothesis of no Oat Variety effect, but with number of Fertilization replicates within each plot on the “x”-axis and different lines for different true Oat variety effects (including no effect).
+
+num_sims32<-90
+fert_effects32 <- c(1, 0)
+num_plots32 <- 5
+varying_fert_replicates32 <- c(0, 5, 10, 15)
+
+varying_oat_effects32 <- c(0, .3, .6, .9)
+
+fert_replicates32 <- numeric(0)
+true_oat_effect32 <- numeric(0)
+prob_reject32<- numeric(0)
+p_vals32 <- numeric(0)
+
+
+row <-1
+
+for (i in 1:length(varying_oat_effects32)) {
+  for (j in 1:length(varying_fert_replicates32)) {
+    for (k in 1:num_sims32) {
+      sims32 <- simulate_many_reps(varying_fert_replicates32[j], num_sims32, num_plots32, c(0, varying_oat_effects32[i]), fert_effects32, .5, .5)
+      
+      p_vals32[k] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims32[[k]]))['oat', 'p-value']
+    }
+    prob_reject32[row] <- mean(p_vals32 <= 0.05)
+    true_oat_effect32[row] <- varying_oat_effects32[j]
+    fert_replicates32[row] <- varying_fert_replicates32[i]
+    row <- row +1
+  }
+}
+
+results32 <- data.frame(prob_reject32, true_oat_effect32, factor(fert_replicates32))
+```
+
+
+```{r}
+ggplot(data = results32) +
+aes(x = factor(fert_replicates32), y =  prob_reject32, col = factor(true_oat_effect32)) +
+geom_point() +
+geom_line(aes(group = factor(true_oat_effect32)))
+
+```
+
+
+
+
+###Figure 3.3
+
+```{r}
+#Here is the code to generate data to create a figure showing probability that you reject the null hypothesis of no Fertilization effect, but with plots per Oat Variety on the “x”-axis and different lines for different true Fertilization effects (including no effect).
+num_sims33<-90
+oat_effects33 <- c(6, 10.5)
+num_plots33 <- 5
+num_plots_vector33 <- c(num_plots33, 2*num_plots33, 3*num_plots33,
+                        4*num_plots33, 5*num_plots33)
+varying_fert_effects33 <- c(0, 1, 2, 3)
+
+plots_per_oat_variety <- numeric(0)
+true_fert_effect33 <- numeric(0)
+prob_reject33<- numeric(0)
+p_vals33 <- numeric(0)
+
+
+row <-1
+
+for (i in 1:length(num_plots_vector33)) {
+  for (j in 1:length(varying_fert_effects33)) {
+    for (k in 1:num_sims33) {
+      sims33 <- simulate_many(num_sims33, num_plots_vector33[i], oat_effects33, c(0, varying_fert_effects33[j]), 1.5, 1)
+      
+      p_vals33[k] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims33[[k]]))['fert', 'p-value']
+    }
+    true_fert_effect33[row] <- varying_fert_effects33[j]
+    prob_reject33[row] <- mean(p_vals33 <= 0.05)
+    plots_per_oat_variety[row] <- num_plots_vector33[i]
+    row <- row +1
+  }
+}
+
+results33 <- data.frame(prob_reject33, true_fert_effect33, factor(plots_per_oat_variety))
+results33
+
+```
+
+
+```{r}
+ggplot(data = results33) +
+aes(x = factor(plots_per_oat_variety), y =  prob_reject33, col = factor(true_fert_effect33)) +
+geom_point() +
+geom_line(aes(group = factor(true_fert_effect33)))
+```
+
+
+###Figure 3.4
+
+```{r}
+#Here is the code to create the data to generate figure 3.4, a figure showing probability that you reject the null hypothesis of no Fertilization effect, but with number of Fertilization replicates within each plot on the “x”-axis and different lines for different true Fertilization effects (including no effect).
+
+num_sims34<-90
+oat_effects34 <- c(1, 0)
+num_plots34 <- 5
+varying_fert_replicates34 <- c(0, 5, 10, 15)
+
+varying_fert_effects34 <- c(0, .3, .6, .9)
+
+fert_replicates34 <- numeric(0)
+true_fert_effect34 <- numeric(0)
+prob_reject34<- numeric(0)
+p_vals34 <- numeric(0)
+
+
+
+row <-1
+
+for (i in 1:length(varying_fert_effects34)) {
+  for (j in 1:length(varying_fert_replicates34)) {
+    for (k in 1:num_sims34) {
+      sims34 <- simulate_many_reps(varying_fert_replicates34[j], num_sims34, num_plots34, oat_effects34, c(0, varying_fert_effects34[i]), .5, .4)
+      
+      p_vals34[k] <- anova(lme(y~oat + fert, random =~1 | plot, data = sims34[[k]]))['fert', 'p-value']
+    }
+    prob_reject34[row] <- mean(p_vals34 <= 0.05)
+    true_fert_effect34[row] <- varying_fert_effects34[j]
+    fert_replicates34[row] <- varying_fert_replicates34[i]
+    row <- row +1
+  }
+}
+
+results34 <- data.frame(prob_reject34, true_fert_effect34, factor(fert_replicates34))
+results34
+
+```
+
+```{r}
+#Visualize 3.4 data
+
+ggplot(data = results34) +
+aes(x = factor(fert_replicates34), y =  prob_reject34, col = factor(true_fert_effect34)) +
+geom_point() +
+geom_line(aes(group = factor(true_fert_effect34)))
+
+```
+
+
+3.1 Increasing replicates rather than sample size is more effective at increasing power to detect main effects for oat variety or fertilization.
+
+3.2 It is not possible to achieve 100% power for either kind of effect by increasing the number of data points.
+
+
+
+
+
+
+
+
+
+
