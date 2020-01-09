@@ -1,6 +1,6 @@
 ---
-title: "Final Project Number 2"
-author: "3032681732"
+title: "Interactions' effect on model output"
+author: "Regan Connell"
 date: "5/16/2019"
 output: html_document
 ---
@@ -14,7 +14,7 @@ library(nlme)
 library(ggplot2)
 ```
 
-##Question 2: How does an interaction between Oat Variety and Fertilization impact power, parameter estimates, and/or Type I error rates?
+##Exploration 2: How does an interaction between Oat Variety and Fertilization impact power, parameter estimates, and/or Type I error rates?
 
 ###Figure 2.1
 ```{r}

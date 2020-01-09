@@ -1,6 +1,6 @@
 ---
-title: "Final Project Question 1"
-author: "3032681732"
+title: "Number of Plots Effect on Model"
+author: "Regan Connell"
 date: "5/2/2019"
 output: html_document
 ---
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(nlme)
 library(ggplot2)
 ```
-##Question 1: How does number of plots affect power, parameter estimates, and/or Type I error rate for main effects of Oat Variety and Fertilization.
+##Exploration 1: How does number of plots affect power, parameter estimates, and/or Type I error rate for main effects of Oat Variety and Fertilization.
 ```{r}
 #Function to simulate 1 split-plot data set that intakse a specified number of plots per oat variety, the true oat and fertilizer effects, as well as the individual random plot effect specified by plot_var (plot variance) and also the overall residual.
 simulate_one_data <- function(num_plots, oat_effects, fertilizer_effects, plot_var, residual_sd) {
